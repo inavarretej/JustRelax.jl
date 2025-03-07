@@ -146,6 +146,7 @@ function StokesArrays(ni::NTuple{N, Integer}) where {N}
     EII_pl = @zeros(ni...)
     viscosity = Viscosity(ni)
     R = Residual(ni...)
-
-    return JustRelax.StokesArrays(P, P0, V, ∇V, Q, τ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω)
+    Δε = SymmetricTensor(ni...)
+    ∇U = @zeros(ni...)
+    return JustRelax.StokesArrays(P, P0, V, ∇V, Q, τ, ε, ε_pl, EII_pl, viscosity, τ_o, R, U, ω, Δε, ∇U)
 end
