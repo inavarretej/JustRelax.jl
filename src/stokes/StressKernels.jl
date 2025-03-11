@@ -979,7 +979,7 @@ end
     return nothing
 end
 
-
+## 2D kernel with strain increment Δε
 @parallel_indices (I...) function update_stresses_center_vertex_ps!(
         ε::NTuple{3},         # normal components @ centers; shear components @ vertices
         Δε::NTuple{3},         # normal components @ centers; shear components @ vertices
@@ -1005,6 +1005,7 @@ end
         phase_xy,
         phase_yz,
         phase_xz,
+        θ_ref
     )
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
@@ -1038,6 +1039,10 @@ end
     dτxyv = compute_stress_increment(
         τxyv[I...], τxyv_old[I...], ηv_ij, Δε[3][I...], _Gv, dτ_rv,dt
     )
+    θ_ref[1][I...] = dτxxv
+    θ_ref[2][I...] = dτyyv
+    θ_ref[3][I...] = dτxyv
+
     τIIv_ij = √(0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2)
 
     # yield function @ center

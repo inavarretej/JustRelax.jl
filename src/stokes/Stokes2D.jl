@@ -627,8 +627,8 @@ function _solve!(
         end
 
         iter += 1
-
-        if iter % nout == 0 && iter > 1
+        
+        if iter % 20 == 0 && iter > 1
             # er_η = norm_mpi(@.(log10(η) - log10(η0)))
             # er_η < 1e-3 && (do_visc = false)
             @parallel (@idx ni) compute_Res!(
@@ -709,6 +709,7 @@ function _solve!(
     args,
     dt,
     strain_increment,
+    θ_ref,
     igg::IGG;
     viscosity_cutoff = (-Inf, Inf),
     viscosity_relaxation = 1.0e-2,
@@ -845,6 +846,7 @@ while iter ≤ iterMax
             phase_ratios.xy,
             phase_ratios.yz,
             phase_ratios.xz,
+            θ_ref
         )
         update_halo!(stokes.τ.xy)
 
@@ -874,7 +876,7 @@ while iter ≤ iterMax
 
     iter += 1
 
-    if iter % nout == 0 && iter > 1
+    if iter % 20 == 0 && iter > 1
         # er_η = norm_mpi(@.(log10(η) - log10(η0)))
         # er_η < 1e-3 && (do_visc = false)
         @parallel (@idx ni) compute_Res!(
@@ -896,13 +898,14 @@ while iter ≤ iterMax
                 length(stokes.R.Ry),
             norm_mpi(stokes.R.RP) / length(stokes.R.RP),
         )
+
         push!(norm_Rx, errs[1])
         push!(norm_Ry, errs[2])
         push!(norm_∇V, errs[3])
         err = maximum_mpi(errs)
         push!(err_evo1, err)
         push!(err_evo2, iter)
-
+        break
         if igg.me == 0 #&& ((verbose && err > ϵ) || iter == iterMax)
             @printf(
                 "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",
@@ -914,6 +917,7 @@ while iter ≤ iterMax
             )
         end
         isnan(err) && error("NaN(s)")
+        
     end
 
     if igg.me == 0 && err ≤ ϵ
