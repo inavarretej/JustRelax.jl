@@ -876,7 +876,7 @@ while iter ≤ iterMax
 
     iter += 1
 
-    if iter % 10 == 0 && iter > 1
+    if iter % nout == 0 && iter > 1
         # er_η = norm_mpi(@.(log10(η) - log10(η0)))
         # er_η < 1e-3 && (do_visc = false)
         @parallel (@idx ni) compute_Res!(
