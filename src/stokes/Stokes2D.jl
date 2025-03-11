@@ -876,7 +876,7 @@ while iter ≤ iterMax
 
     iter += 1
 
-    if iter % 20 == 0 && iter > 1
+    if iter % 10 == 0 && iter > 1
         # er_η = norm_mpi(@.(log10(η) - log10(η0)))
         # er_η < 1e-3 && (do_visc = false)
         @parallel (@idx ni) compute_Res!(
@@ -905,7 +905,6 @@ while iter ≤ iterMax
         err = maximum_mpi(errs)
         push!(err_evo1, err)
         push!(err_evo2, iter)
-        break
         if igg.me == 0 #&& ((verbose && err > ϵ) || iter == iterMax)
             @printf(
                 "Total steps = %d, err = %1.3e [norm_Rx=%1.3e, norm_Ry=%1.3e, norm_∇V=%1.3e] \n",

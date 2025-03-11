@@ -1031,7 +1031,7 @@ end
     Kv = fn_ratio(get_bulk_modulus, rheology, phase)
     volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
     ηv_ij = av_clamped(η, Ic...)
-    dτ_rv = inv(θ_dτ + ηv_ij * _Gv + dt)
+    dτ_rv = inv(θ_dτ * dt + ηv_ij * _Gv + dt)
 
     # stress increments @ vertex
     dτxxv = compute_stress_increment(τxxv_ij, τxxv_old_ij, ηv_ij, Δεxxv_ij, _Gv, dτ_rv,dt)
@@ -1069,7 +1069,7 @@ end
         K = fn_ratio(get_bulk_modulus, rheology, phase)
         volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
         ηij = η[I...]
-        dτ_r = 1.0 / (θ_dτ + ηij * _G + dt)
+        dτ_r = 1.0 / (θ_dτ * dt  + ηij * _G + dt)
 
         # cache strain rates for center calculations
         τij, τij_o, εij ,Δεij = cache_tensors(τ, τ_o, ε, Δε, I...)
