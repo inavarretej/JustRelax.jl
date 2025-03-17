@@ -1,5 +1,4 @@
-using GeophysicalModelGenerator, GMT
-using Interpolations
+using GeophysicalModelGenerator
 
 
 

@@ -34,7 +34,7 @@ end
 
 # Load script dependencies
 using GeoParams
-
+using GLMakie
 # Load file with all the rheology configurations
 include("RiftSetup.jl")
 include("RiftRheology.jl")
@@ -99,7 +99,7 @@ nx, ny   = n, n ÷ 2
 # li, origin, phases_GMG, T_GMG = Setup_Topo(nx+1, ny+1)
 li, origin, phases_GMG, T_GMG = flat_setup(nx+1, ny+1)
 do_vtk   = true # set to true to generate VTK files for ParaView
-figdir   = "Rift2D_displacement"
+figdir   = "output/Rift2D_displacement"
 
 nx, ny = size(T_GMG).-1
 
@@ -119,7 +119,7 @@ grid                = Geometry(ni, li; origin = origin)
 
 # Physical properties using GeoParams ----------------
 rheology            = init_rheologies()
-dt                  =  1e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+dt                  =  5e2 * 3600 * 24 * 365 # diffusive CFL timestep limiter
 dtmax               = 10e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
 # ----------------------------------------------------
 
@@ -169,7 +169,7 @@ temperature2center!(thermal)
 # Buoyancy forces
 ρg               = ntuple(_ -> @zeros(ni...), Val(2))
 
-θ_ref =ntuple(_ -> @zeros((ni.+1)...), Val(3))
+θ_ref =(@zeros((ni)...),@zeros((ni)...),@zeros((ni)...),@zeros((ni.+1)...))
 
 compute_ρg!(ρg[2], phase_ratios, rheology, (T=thermal.Tc, P=stokes.P))
 stokes.P        .= PTArray(backend)(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2))
@@ -195,7 +195,7 @@ flow_bcs         = DisplacementBoundaryConditions(;
     free_surface = false,
 )
 
-εbg = +1e-14 # background strain rate
+εbg = 1e-14 # background strain rate
 stokes.U.Ux[:, 2:(end - 1)] .= PTArray(backend)([ εbg * x * dt for x in xvi[1], y in xci[2]])
 stokes.U.Uy[2:(end - 1), :] .= PTArray(backend)([-εbg * y * dt for x in xci[1], y in xvi[2]])
 
@@ -238,7 +238,7 @@ t, it = 0.0, 0
 cohesion_damage = @rand(ni...) .* 0.05 # 5% random cohesion damage
 
  # iterations over time , uncomment next line
- #while it < 5000  && t < 1.5768e+14 # run only for 5 Myrs
+while it < 5000  && t < 1.5768e+14 # run only for 5 Myrs
 
     # BC_topography_displ(stokes.U.Ux, stokes.U.Uy, εbg, xvi, li..., dt)
     # flow_bcs!(stokes, flow_bcs) # apply boundary conditions
@@ -254,7 +254,6 @@ cohesion_damage = @rand(ni...) .* 0.05 # 5% random cohesion damage
 
     args = (; T = thermal.Tc, P = stokes.P,  dt=Inf, cohesion_C = cohesion_damage)
     strain_increment=true
-
     # Stokes solver ----------------
     t_stokes = @elapsed begin
         out = solve!(
@@ -268,11 +267,10 @@ cohesion_damage = @rand(ni...) .* 0.05 # 5% random cohesion damage
             args,
             dt,
             strain_increment,
-            θ_ref,
             igg,
             ;
             kwargs = (
-                iterMax              = 50e3,
+                iterMax              = 10e5,
                 nout                 = 1e3,
                 viscosity_cutoff     = viscosity_cutoff,
                 free_surface         = false,
@@ -281,7 +279,35 @@ cohesion_damage = @rand(ni...) .* 0.05 # 5% random cohesion damage
         );
     end
 
-## I run it up to here.
+
+
+         # # Plot errors
+
+        # # Crear datos
+        # x1 = 1e3.*(1:length(out.norm_Rx))
+        # x2 = 1e3.*(1:length(out2.norm_Rx))
+        # # Crear la figura y los ejes
+        # fig = Figure(size = (1200, 600), title = "Errors first iteration")
+        # ax1 = Axis(fig[1, 1], title="Log 10 Max Error", xlabel="Iteration", ylabel="Error")
+        # ax2 = Axis(fig[1, 2], title="Log10 Rx", xlabel="Iteration", ylabel="Error")
+        # ax3 = Axis(fig[2, 1], title="Log10 Ry", xlabel="Iteration", ylabel="Error")
+        # ax4 = Axis(fig[2, 2], title="Log10 ∇V", xlabel="Iteration", ylabel="Error")
+        # # Graficar las dos líneas
+        # h1 = plot!(ax1, x1, Array(log10.(out.err_evo1)), label="Strain Increment Approach", color=:blue)
+        # h2 = plot!(ax1, x2, Array(log10.(out2.err_evo1)), label="Strain Rate Approach", color=:red)
+        # plot!(ax2, x1, Array(log10.(out.norm_Rx)), label="Strain Increment Approach", color=:blue)
+        # plot!(ax2, x2, Array(log10.(out2.norm_Rx)), label="Strain Rate Approach", color=:red)
+        # plot!(ax3, x1, Array(log10.(out.norm_Ry)), label="Strain Increment Approach", color=:blue)
+        # plot!(ax3, x2, Array(log10.(out2.norm_Ry)), label="Strain Rate Approach", color=:red)
+        # plot!(ax4, x1, Array(log10.(out.norm_∇V)), label="Strain Increment Approach", color=:blue)
+        # plot!(ax4, x2, Array(log10.(out2.norm_∇V)), label="Strain Rate Approach", color=:red)
+        # axislegend(ax1,
+        #         [h1,h2],
+        #         ["Strain Increment Approach", "Strain Rate Approach"])
+        # # Mostrar la figura
+        # display(fig)
+        # save(joinpath(figdir, "errors.png"), fig)
+
 
 
     include("../src/stokes/VelocityKernels.jl")
@@ -349,9 +375,7 @@ cohesion_damage = @rand(ni...) .* 0.05 # 5% random cohesion damage
     if it == 1 || rem(it, 1) == 0
         # checkpointing(figdir, stokes, thermal.T, η, t)
 
-        if it > 1
-            strain_rate = (strain - Array(stokes.ε.II))./dt
-        end
+
         (; η_vep, η) = stokes.viscosity
         if do_vtk
 
@@ -390,58 +414,62 @@ cohesion_damage = @rand(ni...) .* 0.05 # 5% random cohesion damage
                 t=t
             )
         end
+    
 
-        # Make particles plottable
-        tensor_invariant!(stokes.ε)
-        tensor_invariant!(stokes.ε_pl)
-        
-        strain = Array(stokes.ε.II)
-        # p        = particles.coords
-        # ppx, ppy = p
-        # pxv      = ppx.data[:]./1e3
-        # pyv      = ppy.data[:]./1e3
-        # clr      = pPhases.data[:]
-        # # clr      = pT.data[:]
-        # idxv     = particles.index.data[:];
 
-        # # Make Makie figure
-        # ar  = 3
-        # fig = Figure(size = (1200, 600), title = "t = $t")
-        # ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
-        # ax2 = Axis(fig[2,1], aspect = ar, title = "Phase")
-        # ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
-        # ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
-        # # Plot temperature
-        # h1  = GLMakie.heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:]) , colormap=:batlow)
-        # # Plot particles phase
-        # # h2  = GLMakie.scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
-        # h2 = GLMakie.heatmap!(ax2, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε_pl.II)) , colormap=:batlow)
-        # # Plot 2nd invariant of strain rate
-        # h3  = GLMakie.heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
-        # # Plot effective viscosity
-        # h4  = GLMakie.heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep)) , colormap=:lipari)
-        # hidexdecorations!(ax1)
-        # hidexdecorations!(ax2)
-        # hidexdecorations!(ax3)
-        # h = 200
-        # Colorbar(fig[1,2], h1, height = h)
-        # Colorbar(fig[2,2], h2, height = h)
-        # Colorbar(fig[1,4], h3, height = h)
-        # Colorbar(fig[2,4], h4, height = h)
-        # linkaxes!(ax1, ax2, ax3, ax4)
-        # fig
-        # save(joinpath(figdir, "$(it).png"), fig)
+            # Make particles plottable
+            tensor_invariant!(stokes.ε)
+            tensor_invariant!(stokes.ε_pl)
+            tensor_invariant!(stokes.τ)
+
+            p        = particles.coords
+            ppx, ppy = p
+            pxv      = ppx.data[:]./1e3
+            pyv      = ppy.data[:]./1e3
+            clr      = pPhases.data[:]
+            # clr      = pT.data[:]
+            idxv     = particles.index.data[:];
+            x1 = 1e3.*(1:length(out.norm_Rx)) 
+            # Make Makie figure
+            ar  = 3
+            fig = Figure(size = (1500, 600), title = "t = $t")
+            ax1 = Axis(fig[1,1], aspect = ar, title = "log10(τII)")
+            ax2 = Axis(fig[2,1], aspect = ar, title = "log10(ε_pl.II)")
+            ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
+            ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
+            ax5 = Axis(fig[1, 5], title="Log10 Rx", xlabel="Iteration", ylabel="Error")
+            ax6 = Axis(fig[2, 5], title="Log10 Ry", xlabel="Iteration", ylabel="Error")
+            # Plot temperature
+            h1  = GLMakie.heatmap!(ax1, xci[1].*1e-3, xci[2].*1e-3,Array(log10.(stokes.τ.II)) , colormap=:batlow)
+            # Plot particles phase
+            # h2  = GLMakie.scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
+            h2 = GLMakie.heatmap!(ax2, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε_pl.II)) , colormap=:batlow)
+            # Plot 2nd invariant of strain rate
+            h3  = GLMakie.heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
+            # Plot effective viscosity
+            h4  = GLMakie.heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep)) , colormap=:lipari)
+            h5 = plot!(ax5, x1, Array(log10.(out.norm_Rx)), color=:blue)
+            h6 = plot!(ax6, x1, Array(log10.(out.norm_Ry)), color=:blue)
+            hidexdecorations!(ax1)
+            hidexdecorations!(ax2)
+            hidexdecorations!(ax3)
+            h = 200
+            Colorbar(fig[1,2], h1, height = h)
+            Colorbar(fig[2,2], h2, height = h)
+            Colorbar(fig[1,4], h3, height = h)
+            Colorbar(fig[2,4], h4, height = h)
+            linkaxes!(ax1, ax2, ax3, ax4)
+            linkaxes!(ax5, ax6)
+            fig
+            save(joinpath(figdir, "$(it).png"), fig)
+
+        end
     end
+
     # ------------------------------
 
-end
-
-#return nothing
 
 
-## END OF MAIN SCRIPT ----------------------------------------------------------------
-do_vtk   = true # set to true to generate VTK files for ParaView
-figdir   = "Rift2D_displacement"
 
 
-main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
+
