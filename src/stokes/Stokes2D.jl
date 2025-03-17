@@ -628,7 +628,7 @@ function _solve!(
 
         iter += 1
         
-        if iter % 20 == 0 && iter > 1
+        if iter % nout == 0 && iter > 1
             # er_η = norm_mpi(@.(log10(η) - log10(η0)))
             # er_η < 1e-3 && (do_visc = false)
             @parallel (@idx ni) compute_Res!(
@@ -709,7 +709,6 @@ function _solve!(
     args,
     dt,
     strain_increment,
-    θ_ref,
     igg::IGG;
     viscosity_cutoff = (-Inf, Inf),
     viscosity_relaxation = 1.0e-2,
@@ -821,6 +820,7 @@ while iter ≤ iterMax
         )
         # end
 
+
         @parallel (@idx ni .+ 1) update_stresses_center_vertex_ps!(
             @strain(stokes),
             @strain_increment(stokes),
@@ -845,8 +845,7 @@ while iter ≤ iterMax
             phase_ratios.vertex,
             phase_ratios.xy,
             phase_ratios.yz,
-            phase_ratios.xz,
-            θ_ref
+            phase_ratios.xz
         )
         update_halo!(stokes.τ.xy)
 
