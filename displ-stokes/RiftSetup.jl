@@ -1,4 +1,5 @@
-using GeophysicalModelGenerator
+using GeophysicalModelGenerator, GMT
+using Interpolations
 
 
 
@@ -20,7 +21,7 @@ function flat_setup(Nx, Nz)
      # In many (geodynamic) models, one also has to define the temperature, so lets define it as well
      Temp = fill(0.0, nx, ny, nz);
  
-     depth_layers = [15] # depth of the ith layer in km
+     depth_layers = [15 50] # depth of the ith layer in km
      lith = LithosphericPhases(Layers=depth_layers, Phases=[1 2])
  
      add_box!(Phases, Temp, Grid; 
@@ -31,12 +32,13 @@ function flat_setup(Nx, Nz)
          T     = HalfspaceCoolingTemp(Age=20)
      )
     
-     add_ellipsoid!(Phases, Temp, Grid; 
-         cen    = (0, 0, -12.5), 
-         axes   = (2, 2,2),
-         phase  = ConstantPhase(3),
-         # T  = ConstantTemp(150),
-     )
+     add_box!(Phases, Temp, Grid; 
+              xlim=(-0.5,0.5),
+              ylim=(-Ly, Ly), 
+              zlim=(-1, -13), 
+              phase = ConstantPhase(3), 
+              DipAngle=-30);
+
  
     for I in eachindex(Grid.z.val)
         if Grid.z.val[I...] > 0 

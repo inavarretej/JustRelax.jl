@@ -9,7 +9,7 @@ function init_rheologies()
 
     # rheologies from the GeoParams database
     disl_upper_crust = GeoParams.Dislocation.SetDislocationCreep(
-        GeoParams.Dislocation.wet_quartzite_Ueda_2008
+        GeoParams.Dislocation.strong_diabase_Mackwell_1998
     )
     disl_lower_crust = GeoParams.Dislocation.SetDislocationCreep(
         GeoParams.Dislocation.wet_anorthite_Rybacki_2006
@@ -19,6 +19,7 @@ function init_rheologies()
     el_upper_crust              = SetConstantElasticity(; G=10e9, ν=0.45)
     el_lower_crust              = SetConstantElasticity(; G=10e9, ν=0.45)
     el_lithospheric_mantle      = SetConstantElasticity(; G=10e9, ν=0.45)
+    el_seed                     = SetConstantElasticity(; G=5e9, ν=0.45)
     # el_sublithospheric_mantle   = SetConstantElasticity(; G=67e9, ν=0.5)
     β_upper_crust               = inv(get_Kb(el_upper_crust))
     β_lower_crust               = inv(get_Kb(el_lower_crust))
@@ -26,13 +27,13 @@ function init_rheologies()
     # β_sublithospheric_mantle    = inv(get_Kb(el_sublithospheric_mantle))
 
     # Physical properties using GeoParams ----------------
-    η_reg       = 1e17 # regularized viscosity
-    cohesion    = 100e6 ## 100e6
-    friction    = 30
-    friction_seed = 5
-    softening_C = LinearSoftening((cohesion/2, cohesion), (0e0, 2e0))
-    pl          = DruckerPrager_regularised(; C = cohesion, softening_C = softening_C, ϕ=friction, η_vp=η_reg, Ψ=0.0, ) # non-regularized plasticity
-    pl_seed     = DruckerPrager_regularised(; C = 1e6, ϕ=friction_seed, η_vp=η_reg, Ψ=0.0, ) # non-regularized plasticity
+    η_reg         = 1e17 # regularized viscosity
+    cohesion      = 30e6 ## 100e6
+    friction      = 30
+    friction_seed = 1
+    softening_C   = LinearSoftening((cohesion/2, cohesion), (0e0, 2e0))
+    pl            = DruckerPrager_regularised(; C = cohesion, softening_C = softening_C, ϕ=friction, η_vp=η_reg, Ψ=0.0) # regularized plasticity
+    pl_seed       = DruckerPrager_regularised(; C = 1e6, ϕ=friction_seed, η_vp=η_reg, Ψ=0.0, ) # regularized plasticity
     
     # crust
     # K_crust = TP_Conductivity(;
@@ -85,10 +86,10 @@ function init_rheologies()
             Density           = PT_Density(; ρ0=2.7e3, β=β_upper_crust, T0=0.0, α = 2.4e-5),
             HeatCapacity      = ConstantHeatCapacity(; Cp=1e3),
             Conductivity      = ConstantConductivity(; k=2.1),
-            Elasticity = el_upper_crust,
-            Plasticity = pl_seed,
+            Elasticity        = el_seed,
+            Plasticity        = pl_seed,
             # Conductivity      = K_crust,
-            CompositeRheology = CompositeRheology((disl_upper_crust,el_upper_crust,pl_seed)),
+            CompositeRheology = CompositeRheology((disl_upper_crust,el_seed,pl_seed)),
             RadioactiveHeat   = ConstantRadioactiveHeat(1.3),
             ShearHeat         = ConstantShearheating(1.0NoUnits),
             Gravity           = ConstantGravity(; g=9.81),

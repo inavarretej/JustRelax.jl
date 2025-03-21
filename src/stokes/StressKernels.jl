@@ -1048,9 +1048,9 @@ end
         # stress correction @ vertex
         λv[I...] =
             (1.0 - relλ) * λv[I...] +
-            relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv2 + η_regv + volumev))
+            relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv * dt  + η_regv + volumev))
         dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
-        τxyv[I...] += dτxyv - 2.0 * ηv_ij * 0.5 * λv[I...] * dQdτxy * dτ_rv2
+        τxyv[I...] += dτxyv - 2.0 * ηv_ij * dt * λv[I...] * dQdτxy * dτ_rv
     else
         # stress correction @ vertex
         τxyv[I...] += dτxyv
@@ -1085,11 +1085,11 @@ end
             # stress correction @ center
             λ[I...] =
                 (1.0 - relλ) * λ[I...] +
-                relλ * (max(F, 0.0) / (η[I...] * dτ_r2 + η_reg + volume))
+                relλ * (max(F, 0.0) / (η[I...] * dτ_r * dt  + η_reg + volume))
             dQdτij = @. 0.5 * (τij + dτij) / τII_ij
             # dτij        = @. (-(τij - τij_o) * ηij * _Gdt - τij .+ 2.0 * ηij * (εij  - λ[I...] *dQdτij )) * dτ_r
             εij_pl = λ[I...] .* dQdτij
-            dτij = @. dτij - 2.0 * ηij * εij_pl * dτ_r2
+            dτij = @. dτij - 2.0 * ηij * dt * εij_pl * dτ_r
             τij = dτij .+ τij
             setindex!.(τ, τij, I...)
             setindex!.(ε_pl, εij_pl, I...)

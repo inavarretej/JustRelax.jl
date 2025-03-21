@@ -99,7 +99,7 @@ nx, ny   = n, n ÷ 2
 # li, origin, phases_GMG, T_GMG = Setup_Topo(nx+1, ny+1)
 li, origin, phases_GMG, T_GMG = flat_setup(nx+1, ny+1)
 do_vtk   = true # set to true to generate VTK files for ParaView
-figdir   = "output/Rift2D_displacement"
+figdir   = "output/Rift2D_strain_increment"
 
 nx, ny = size(T_GMG).-1
 
@@ -280,41 +280,6 @@ while it < 5000  && t < 1.5768e+14 # run only for 5 Myrs
     end
 
 
-
-         # # Plot errors
-
-        # # Crear datos
-        # x1 = 1e3.*(1:length(out.norm_Rx))
-        # x2 = 1e3.*(1:length(out2.norm_Rx))
-        # # Crear la figura y los ejes
-        # fig = Figure(size = (1200, 600), title = "Errors first iteration")
-        # ax1 = Axis(fig[1, 1], title="Log 10 Max Error", xlabel="Iteration", ylabel="Error")
-        # ax2 = Axis(fig[1, 2], title="Log10 Rx", xlabel="Iteration", ylabel="Error")
-        # ax3 = Axis(fig[2, 1], title="Log10 Ry", xlabel="Iteration", ylabel="Error")
-        # ax4 = Axis(fig[2, 2], title="Log10 ∇V", xlabel="Iteration", ylabel="Error")
-        # # Graficar las dos líneas
-        # h1 = plot!(ax1, x1, Array(log10.(out.err_evo1)), label="Strain Increment Approach", color=:blue)
-        # h2 = plot!(ax1, x2, Array(log10.(out2.err_evo1)), label="Strain Rate Approach", color=:red)
-        # plot!(ax2, x1, Array(log10.(out.norm_Rx)), label="Strain Increment Approach", color=:blue)
-        # plot!(ax2, x2, Array(log10.(out2.norm_Rx)), label="Strain Rate Approach", color=:red)
-        # plot!(ax3, x1, Array(log10.(out.norm_Ry)), label="Strain Increment Approach", color=:blue)
-        # plot!(ax3, x2, Array(log10.(out2.norm_Ry)), label="Strain Rate Approach", color=:red)
-        # plot!(ax4, x1, Array(log10.(out.norm_∇V)), label="Strain Increment Approach", color=:blue)
-        # plot!(ax4, x2, Array(log10.(out2.norm_∇V)), label="Strain Rate Approach", color=:red)
-        # axislegend(ax1,
-        #         [h1,h2],
-        #         ["Strain Increment Approach", "Strain Rate Approach"])
-        # # Mostrar la figura
-        # display(fig)
-        # save(joinpath(figdir, "errors.png"), fig)
-
-
-
-    include("../src/stokes/VelocityKernels.jl")
-    include("../src/MiniKernels.jl")
-    
-    _dx,_dy = inv.(di)
-
     dt   = min(dtmax, compute_dt(stokes, di) * 0.95)
     println("Stokes solver time             ")
     println("   Total time:      $t_stokes s")
@@ -448,8 +413,8 @@ while it < 5000  && t < 1.5768e+14 # run only for 5 Myrs
             h3  = GLMakie.heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
             # Plot effective viscosity
             h4  = GLMakie.heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep)) , colormap=:lipari)
-            h5 = plot!(ax5, x1, Array(log10.(out.norm_Rx)), color=:blue)
-            h6 = plot!(ax6, x1, Array(log10.(out.norm_Ry)), color=:blue)
+            h5 = GLMakie.plot!(ax5, x1, Array(log10.(out.norm_Rx)), color=:blue)
+            h6 = GLMakie.plot!(ax6, x1, Array(log10.(out.norm_Ry)), color=:blue)
             hidexdecorations!(ax1)
             hidexdecorations!(ax2)
             hidexdecorations!(ax3)
