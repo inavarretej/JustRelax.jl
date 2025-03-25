@@ -2,6 +2,7 @@ const isCUDA = false
 # const isCUDA = true
 
 @static if isCUDA
+    using CUDA
 end
 
 using JustRelax, JustRelax.JustRelax2D, JustRelax.DataIO
@@ -93,27 +94,8 @@ function BC_topography_displ(Ux, Uy, εbg, xvi, lx, ly, dt)
     return nothing
 end
 
+
 ## END OF HELPER FUNCTION ------------------------------------------------------------
-
-
-## END OF MAIN SCRIPT ----------------------------------------------------------------
-do_vtk   = true # set to true to generate VTK files for ParaView
-figdir   = "Rift2D_strainincrement"
-n        = 512
-nx, ny   = n, n ÷ 2
-# li, origin, phases_GMG, T_GMG = Setup_Topo(nx+1, ny+1)
-li, origin, phases_GMG, T_GMG = flat_setup(nx+1, ny+1)
-# heatmap(T_GMG)
-# heatmap(phases_GMG)
-
-nx, ny = size(T_GMG).-1
-
-igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
-    IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
-else
-    igg
-end
-
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
 function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk =false)
@@ -127,50 +109,40 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # Physical properties using GeoParams ----------------
     rheology            = init_rheologies()
-    dt                  = 2e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
-    dtmax               = 25e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dt                  =  1e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dtmax               = 10e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
-    nxcell    = 100
-    max_xcell = 125
-    min_xcell = 75
-    particles = init_particles(
+    nxcell              = 40
+    max_xcell           = 60
+    min_xcell           = 20
+    particles           = init_particles(
         backend_JP, nxcell, max_xcell, min_xcell, xvi, di, ni
     )
+    subgrid_arrays      = SubgridDiffusionCellArrays(particles)
     # velocity grids
-    grid_vxi = velocity_grids(xci, xvi, di)
+    grid_vxi            = velocity_grids(xci, xvi, di)
     # material phase & temperature
-    subgrid_arrays = SubgridDiffusionCellArrays(particles)
-    pPhases, pT    = init_cell_arrays(particles, Val(2))
-    particle_args  = (pT, pPhases)
+    pPhases, pT         = init_cell_arrays(particles, Val(2))
+    particle_args       = (pT, pPhases)
+
     # Assign particles phases anomaly
-    phases_device = PTArray(backend)(phases_GMG)
-    phase_ratios  = phase_ratios = PhaseRatios(backend_JP, length(rheology), ni)
+    phases_device    = PTArray(backend)(phases_GMG)
+    phase_ratios     = PhaseRatios(backend_JP, length(rheology),ni)
     init_phases!(pPhases, phases_device, particles, xvi)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+    update_phase_ratios!(phase_ratios, particles, xci,xvi, pPhases)
     # ----------------------------------------------------
 
-    # RockRatios
-    air_phase = 4
-    ϕ_R = RockRatio(backend, ni)
-    update_rock_ratio!(ϕ_R, phase_ratios, air_phase)
- 
-    # marker chain
-    nxcell, min_xcell, max_xcell = 100, 75, 125
-    initial_elevation = 0e3
-    chain = init_markerchain(backend_JP, nxcell, min_xcell, max_xcell, xvi[1], initial_elevation)
-    update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
-    update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-    update_rock_ratio!(ϕ_R, phase_ratios, air_phase)
-  
+
+
     # STOKES ---------------------------------------------
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend, ni)
-    # pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3π, r=1e0, CFL = 1 / √2.1) # Re=3π, r=0.7
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3e0, r=1e0, CFL = 1 / √2.1) # Re=3π, r=0.7
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3π, r=1e0, CFL = 1 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------
 
+    
     # TEMPERATURE PROFILE --------------------------------
     Ttop             = minimum(T_GMG)
     Tbot             = maximum(T_GMG)
@@ -180,7 +152,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # Add thermal anomaly BC's
     T_air = 273.0e0
     Ω_T = @zeros(size(thermal.T)...)
-    
+
     thermal_bc = TemperatureBoundaryConditions(;
         no_flux     = (; left = true, right = true, top = false, bot = false),
         dirichlet   = (; constant = T_air, mask = Ω_T)
@@ -199,31 +171,26 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # Rheology
     args0            = (T=thermal.Tc, P=stokes.P, dt = Inf)
     viscosity_cutoff = (1e17, 1e23)
-    compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff; air_phase = air_phase)
+    compute_viscosity!(stokes, phase_ratios, args0, rheology, viscosity_cutoff)
 
     # PT coefficients for thermal diffusion
     pt_thermal       = PTThermalCoeffs(
         backend, rheology, phase_ratios, args0, dt, ni, di, li; ϵ=1e-5, CFL=0.98 / √2.1
     )
 
-    # # Boundary conditions
-    # flow_bcs         = VelocityBoundaryConditions(;
-    #     free_slip    = (left = true , right = true , top = true , bot = true),
-    #     free_surface = false,
-    # )
 
     flow_bcs         = DisplacementBoundaryConditions(;
         free_slip    = (left = true , right = true , top = true , bot = true),
         free_surface = false,
     )
-
+    
+    
     εbg = +1e-14 # background strain rate
     stokes.U.Ux[:, 2:(end - 1)] .= PTArray(backend)([ εbg * x * dt for x in xvi[1], y in xci[2]])
     stokes.U.Uy[2:(end - 1), :] .= PTArray(backend)([-εbg * y * dt for x in xci[1], y in xvi[2]])
 
     # BC_topography_displ(stokes.U.Ux, stokes.U.Uy, εbg, xvi, li..., dt)
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
-    displacement2velocity!(stokes, dt)
     update_halo!(@velocity(stokes)...)
 
     # IO -------------------------------------------------
@@ -253,9 +220,11 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     t, it = 0.0, 0
 
     # uncomment for random cohesion damage
-    # cohesion_damage = @rand(ni...) .* 0.05 # 5% random cohesion damage
-    strain_increment = true
-   while it < 1000 # run only for 5 Myrs
+    cohesion_damage = @rand(ni...) .* 0.05 # 5% random cohesion damage
+
+    strain_increment = true;
+
+    while it < 1000 # run only for 5 Myrs
 
         # BC_topography_displ(stokes.U.Ux, stokes.U.Uy, εbg, xvi, li..., dt)
         # flow_bcs!(stokes, flow_bcs) # apply boundary conditions
@@ -269,37 +238,34 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         thermal_bcs!(thermal, thermal_bc)
         temperature2center!(thermal)
 
-        # args = (; T = thermal.Tc, P = stokes.P,  dt=Inf, cohesion_C = cohesion_damage)
-        args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
+        args = (; T = thermal.Tc, P = stokes.P,  dt=Inf, cohesion_C = cohesion_damage)
 
         # Stokes solver ----------------
         t_stokes = @elapsed begin
-            solve_VariationalStokes!(
+            out = solve!(
                 stokes,
                 pt_stokes,
                 di,
                 flow_bcs,
                 ρg,
                 phase_ratios,
-                ϕ_R,
                 rheology,
                 args,
                 dt,
+                strain_increment,
                 igg;
-                kwargs = (;
-                    iterMax = 10.0e3,
-                    free_surface = true,
-                    nout = 2.0,
-                    viscosity_cutoff = viscosity_cutoff,
+                kwargs = (
+                    iterMax              = 50e4,
+                    nout                 = 1e3,
+                    viscosity_cutoff     = viscosity_cutoff,
+                    free_surface         = false
                 )
-            )
+            );
         end
-        # dtmax = (it < 10 ? 2e3 : 3e3) * 3600 * 24 * 365 # diffusive CFL timestep limiter
-        dt    = compute_dt(stokes, di, dtmax)
+        dt   = min(dtmax, compute_dt(stokes, di) * 0.95)
         println("Stokes solver time             ")
         println("   Total time:      $t_stokes s")
-        println("           Δt:      $(dt / (3600 * 24 * 365)) kyrs")
-        # println("   Time/iteration:  $(t_stokes / out.iter) s")
+        println("   Time/iteration:  $(t_stokes / out.iter) s")
         # ------------------------------
 
         compute_shear_heating!(
@@ -311,8 +277,6 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         )
 
         # Thermal solver ---------------
-        # update mask of Dirichlet BC
-        @parallel (@idx ni .+ 1) update_Dirichlet_mask!(thermal_bc.dirichlet.mask, phase_ratios.vertex, air_phase)
         heatdiffusion_PT!(
             thermal,
             pt_thermal,
@@ -342,20 +306,15 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
         # Advection --------------------
         # advect particles in space
-        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        advection_LinP!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
         # advect particles in memory
         move_particles!(particles, xvi, particle_args)
+
         # check if we need to inject particles
         inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
-
-        # advect marker chain
-        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
-        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
-
+        
         # update phase ratios
         update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
-        update_rock_ratio!(ϕ_R, phase_ratios, air_phase)
-  
 
         @show it += 1
         t        += dt
@@ -386,11 +345,6 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                     Array(Vx_v),
                     Array(Vy_v),
                 )
-                save_marker_chain(
-                    joinpath(vtk_dir, "topo_" * lpad("$it", 6, "0")),
-                    xvi[1], 
-                    Array(chain.h_vertices),
-                )
                 save_vtk(
                     joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
                     xvi,
@@ -409,7 +363,6 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             ppx, ppy = p
             pxv      = ppx.data[:]./1e3
             pyv      = ppy.data[:]./1e3
-            chain_x, chain_y = chain.coords
             clr      = pPhases.data[:]
             # clr      = pT.data[:]
             idxv     = particles.index.data[:];
@@ -448,19 +401,22 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     return nothing
 end
 
+## END OF MAIN SCRIPT ----------------------------------------------------------------
+do_vtk   = true # set to true to generate VTK files for ParaView
+figdir   = "output/Rift2D_strain_increment"
+n        = 300
+nx, ny   = n, n ÷ 2
+# li, origin, phases_GMG, T_GMG = Setup_Topo(nx+1, ny+1)
+li, origin, phases_GMG, T_GMG = flat_setup(nx+1, ny+1)
+# heatmap(T_GMG)
+# heatmap(phases_GMG)
+
+nx, ny = size(T_GMG).-1
+
+igg      = if !(JustRelax.MPI.Initialized()) # initialize (or not) MPI grid
+    IGG(init_global_grid(nx, ny, 1; init_MPI= true)...)
+else
+    igg
+end
 
 main(li, origin, phases_GMG, igg; figdir = figdir, nx = nx, ny = ny, do_vtk = do_vtk);
-
-
-
-# p        = particles.coords
-# ppx, ppy = p
-# pxv      = ppx.data[:]./1e3
-# pyv      = ppy.data[:]./1e3
-# chain_x, chain_y = chain.coords
-# x = filter(!isnan, Array(chain_x.data[:]))
-# y = filter(!isnan, Array(chain_y.data[:]))
-# scatter(x, y, markersize = 30)
-
-# scatter(Array(chain.h_vertices))
-# scatter!(Array(chain.h_vertices0))

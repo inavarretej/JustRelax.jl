@@ -9,6 +9,7 @@ function init_rheologies()
 
     # rheologies from the GeoParams database
     disl_upper_crust = GeoParams.Dislocation.SetDislocationCreep(
+        # GeoParams.Dislocation.wet_quartzite_Ueda_2008
         GeoParams.Dislocation.strong_diabase_Mackwell_1998
     )
     disl_lower_crust = GeoParams.Dislocation.SetDislocationCreep(
@@ -83,7 +84,7 @@ function init_rheologies()
         # Name              = "Weak Brittle Inclusion",
         SetMaterialParams(;
             Phase             = 3,
-            Density           = PT_Density(; ρ0=2.7e3, β=β_upper_crust, T0=0.0, α = 2.4e-5),
+            Density           = PT_Density(; ρ0=3.3e3, β=β_upper_crust, T0=0.0, α = 2.4e-5),
             HeatCapacity      = ConstantHeatCapacity(; Cp=1e3),
             Conductivity      = ConstantConductivity(; k=2.1),
             Elasticity        = el_seed,

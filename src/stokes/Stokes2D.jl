@@ -693,7 +693,7 @@ function _solve!(
 end
 
 
-
+# Strain increment based solver
 function _solve!(
     stokes::JustRelax.StokesArrays,
     pt_stokes,
@@ -801,11 +801,6 @@ while iter ≤ iterMax
             @strain(stokes)..., @strain_increment(stokes)..., _dt
         )
 
-
-        # if rem(iter, nout) == 0
-        #     @copy η0 η
-        # end
-        # if do_visc
         update_viscosity!(
             stokes,
             phase_ratios,
