@@ -27,7 +27,7 @@ function flat_setup(Nx, Nz)
      add_box!(Phases, Temp, Grid; 
          xlim  =(-Lx, Lx), 
          ylim  =(-Ly, Ly), 
-         zlim  =(-60.0, 0.0), 
+         zlim  =(-70.0, 0.0), 
          phase = lith, 
          T     = HalfspaceCoolingTemp(Age=20)
      )

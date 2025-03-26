@@ -31,7 +31,7 @@ function init_rheologies()
     η_reg         = 1e17 # regularized viscosity
     cohesion      = 30e6 ## 100e6
     friction      = 30
-    friction_seed = 1
+    friction_seed = 5
     softening_C   = LinearSoftening((cohesion/2, cohesion), (0e0, 2e0))
     pl            = DruckerPrager_regularised(; C = cohesion, softening_C = softening_C, ϕ=friction, η_vp=η_reg, Ψ=0.0) # regularized plasticity
     pl_seed       = DruckerPrager_regularised(; C = 1e6, ϕ=friction_seed, η_vp=η_reg, Ψ=0.0, ) # regularized plasticity

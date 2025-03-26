@@ -398,7 +398,6 @@ while iter ≤ iterMax
     iter += 1
 
     if iter % nout == 0 && iter > 1
-        break
         errs = (
             norm_mpi(@views stokes.R.Rx[2:(end - 1), 2:(end - 1)]) /
                 length(stokes.R.Rx),

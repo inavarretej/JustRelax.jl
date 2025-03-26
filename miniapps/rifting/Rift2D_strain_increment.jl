@@ -403,7 +403,7 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk   = true # set to true to generate VTK files for ParaView
-figdir   = "output/Rift2D_strain_increment"
+figdir   = "output/Rift2D_strain_increment" 
 n        = 300
 nx, ny   = n, n ÷ 2
 # li, origin, phases_GMG, T_GMG = Setup_Topo(nx+1, ny+1)
