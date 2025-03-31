@@ -330,7 +330,7 @@ while iter ≤ iterMax
         update_ρg!(ρg[2], phase_ratios, rheology, args)
 
         @parallel (@idx ni .+ 1) compute_strain_rate!(
-            @strain_increment(stokes)..., stokes.∇U, @velocity(stokes)..., ϕ, _di...
+            @strain_increment(stokes)..., stokes.∇U, @displacement(stokes)..., ϕ, _di...
         )
 
         @parallel (@idx ni .+ 1) compute_strain_rate_from_increment!(
