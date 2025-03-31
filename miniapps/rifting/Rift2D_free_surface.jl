@@ -32,10 +32,11 @@ else
 end
 
 # Load script dependencies
-using GeoParams, GLMakie
+using GeoParams
+#using  GLMakie
 
 # Load file with all the rheology configurations
-include("RiftSetup.jl")
+include("RiftSetup_FaultInclusion.jl")
 include("RiftRheology.jl")
 
 ## SET OF HELPER FUNCTIONS PARTICULAR FOR THIS SCRIPT --------------------------------
@@ -98,8 +99,8 @@ end
 
 ## END OF MAIN SCRIPT ----------------------------------------------------------------
 do_vtk   = true # set to true to generate VTK files for ParaView
-figdir   = "Rift2D_strainincrement"
-n        = 512
+figdir   = "output/Rift2D_reset_plastic"
+n        = 256
 nx, ny   = n, n ÷ 2
 # li, origin, phases_GMG, T_GMG = Setup_Topo(nx+1, ny+1)
 li, origin, phases_GMG, T_GMG = flat_setup(nx+1, ny+1)
@@ -116,7 +117,7 @@ end
 
 
 ## BEGIN OF MAIN SCRIPT --------------------------------------------------------------
-function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk =false)
+#function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk =false)
 
     # Physical domain ------------------------------------
     ni                  = nx, ny           # number of cells
@@ -127,8 +128,8 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
 
     # Physical properties using GeoParams ----------------
     rheology            = init_rheologies()
-    dt                  = 2e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
-    dtmax               = 25e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dt                  = 1e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
+    dtmax               = 10e3 * 3600 * 24 * 365 # diffusive CFL timestep limiter
     # ----------------------------------------------------
 
     # Initialize particles -------------------------------
@@ -168,7 +169,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # Allocate arrays needed for every Stokes problem
     stokes           = StokesArrays(backend, ni)
     # pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3π, r=1e0, CFL = 1 / √2.1) # Re=3π, r=0.7
-    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3e0, r=1e0, CFL = 1 / √2.1) # Re=3π, r=0.7
+    pt_stokes        = PTStokesCoeffs(li, di; ϵ=1e-4, Re=3π, r=0.7, CFL = 0.85 / √2.1) # Re=3π, r=0.7
     # ----------------------------------------------------
 
     # TEMPERATURE PROFILE --------------------------------
@@ -233,6 +234,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
         take(vtk_dir)
     end
     take(figdir)
+    
     # ----------------------------------------------------
 
     local Vx_v, Vy_v
@@ -255,7 +257,7 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
     # uncomment for random cohesion damage
     # cohesion_damage = @rand(ni...) .* 0.05 # 5% random cohesion damage
     strain_increment = true
-   while it < 1000 # run only for 5 Myrs
+    while it < 10 # run only for 5 Myrs
 
         # BC_topography_displ(stokes.U.Ux, stokes.U.Uy, εbg, xvi, li..., dt)
         # flow_bcs!(stokes, flow_bcs) # apply boundary conditions
@@ -285,11 +287,13 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
                 rheology,
                 args,
                 dt,
+                strain_increment,
                 igg;
                 kwargs = (;
-                    iterMax = 10.0e3,
+                    #iterMax = it > 0 ? 250e3 : 50.0e4,
+                    iterMax = 5.0e3,
                     free_surface = true,
-                    nout = 2.0,
+                    nout = 1e3,
                     viscosity_cutoff = viscosity_cutoff,
                 )
             )
@@ -324,7 +328,207 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             kwargs = (
                 igg     = nothing,
                 phase   = phase_ratios,
-                iterMax = 10e3,
+                iterMax = 50e4,
+                nout    = 1e3,
+                verbose = true,
+            )
+        )
+        @show extrema(thermal.T)
+
+        subgrid_characteristic_time!(
+            subgrid_arrays, particles, dt₀, phase_ratios, rheology, thermal, stokes, xci, di
+        )
+        centroid2particle!(subgrid_arrays.dt₀, xci, dt₀, particles)
+        subgrid_diffusion!(
+            pT, thermal.T, thermal.ΔT, subgrid_arrays, particles, xvi,  di, dt
+        )
+        # ------------------------------
+
+        # Advection --------------------
+        # advect particles in space
+        advection_MQS!(particles, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        # advect particles in memory
+        move_particles!(particles, xvi, particle_args)
+        # check if we need to inject particles
+        inject_particles_phase!(particles, pPhases, (pT, ), (T_buffer, ), xvi)
+
+        # advect marker chain
+        advect_markerchain!(chain, RungeKutta2(), @velocity(stokes), grid_vxi, dt)
+        update_phases_given_markerchain!(pPhases, chain, particles, origin, di, air_phase)
+
+        # update phase ratios
+        update_phase_ratios!(phase_ratios, particles, xci, xvi, pPhases)
+        update_rock_ratio!(ϕ_R, phase_ratios, air_phase)
+  
+
+        @show it += 1
+        t        += dt
+
+        # Data I/O and plotting ---------------------
+        if it == 1 || rem(it, 1) == 0
+            # checkpointing(figdir, stokes, thermal.T, η, t)
+            (; η_vep, η) = stokes.viscosity
+            if do_vtk
+                
+                velocity2vertex!(Vx_v, Vy_v, @velocity(stokes)...)
+                data_v = (;
+                    T   = Array(T_buffer),        
+                    Vx  = Array(Vx_v),
+                    Vy  = Array(Vy_v),
+                )
+                data_c = (;
+                    Pdyno= Array(stokes.P) .- Array(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2)),
+                    P   = Array(stokes.P),
+                    η   = Array(η_vep),
+                    τII = Array(stokes.τ.II),
+                    τxx = Array(stokes.τ.xx),
+                    τyy = Array(stokes.τ.yy),
+                    εII = Array(stokes.ε.II),
+                    εII_pl = Array(stokes.ε_pl.II),
+                )
+                velocity_v = (
+                    Array(Vx_v),
+                    Array(Vy_v),
+                )
+                save_marker_chain(
+                    joinpath(vtk_dir, "topo_" * lpad("$it", 6, "0")),
+                    xvi[1], 
+                    Array(chain.h_vertices),
+                )
+                save_vtk(
+                    joinpath(vtk_dir, "vtk_" * lpad("$it", 6, "0")),
+                    xvi,
+                    xci,
+                    data_v,
+                    data_c,
+                    velocity_v
+                )
+            end
+
+            # Make particles plottable
+            # tensor_invariant!(stokes.ε)
+            # tensor_invariant!(stokes.ε_pl)
+
+            # p        = particles.coords
+            # ppx, ppy = p
+            # pxv      = ppx.data[:]./1e3
+            # pyv      = ppy.data[:]./1e3
+            # chain_x, chain_y = chain.coords
+            # clr      = pPhases.data[:]
+            # # clr      = pT.data[:]
+            # idxv     = particles.index.data[:];
+            # # Make Makie figure
+            # ar  = 3
+            # fig = Figure(size = (1200, 600), title = "t = $t")
+            # ax1 = Axis(fig[1,1], aspect = ar, title = "T [K]  (t=$(t/(1e6 * 3600 * 24 *365.25)) Myrs)")
+            # ax2 = Axis(fig[2,1], aspect = ar, title = "Phase")
+            # ax3 = Axis(fig[1,3], aspect = ar, title = "log10(εII)")
+            # ax4 = Axis(fig[2,3], aspect = ar, title = "log10(η)")
+            # # Plot temperature
+            # h1  = GLMakie.heatmap!(ax1, xvi[1].*1e-3, xvi[2].*1e-3, Array(thermal.T[2:end-1,:]) , colormap=:batlow)
+            # # Plot particles phase
+            # # h2  = GLMakie.scatter!(ax2, Array(pxv[idxv]), Array(pyv[idxv]), color=Array(clr[idxv]), markersize = 1)
+            # h2 = GLMakie.heatmap!(ax2, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε_pl.II)) , colormap=:batlow)
+            # # Plot 2nd invariant of strain rate
+            # h3  = GLMakie.heatmap!(ax3, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(stokes.ε.II)) , colormap=:batlow)
+            # # Plot effective viscosity
+            # h4  = GLMakie.heatmap!(ax4, xci[1].*1e-3, xci[2].*1e-3, Array(log10.(η_vep)) , colormap=:lipari)
+            # hidexdecorations!(ax1)
+            # hidexdecorations!(ax2)
+            # hidexdecorations!(ax3)
+            # h = 200
+            # # Colorbar(fig[1,2], h1, height = h)
+            # # Colorbar(fig[2,2], h2, height = h)
+            # # Colorbar(fig[1,4], h3, height = h)
+            # # Colorbar(fig[2,4], h4, height = h)
+            # linkaxes!(ax1, ax2, ax3, ax4)
+            # fig # |> display
+            # save(joinpath(figdir, "$(it).png"), fig)
+        end
+        # ------------------------------
+
+    end
+
+    similar(stokes.ε_pl) 
+
+    stokes.ε_pl.xx .= 0.0
+    stokes.ε_pl.yy .= 0.0
+    stokes.ε_pl.xy .= 0.0
+    stokes.ε_pl.xy_c .= 0.0
+    stokes.ε_pl.II .= 0.0
+
+
+    while it < 500 # run only for 5 Myrs
+
+        # BC_topography_displ(stokes.U.Ux, stokes.U.Uy, εbg, xvi, li..., dt)
+        # flow_bcs!(stokes, flow_bcs) # apply boundary conditions
+        # update_halo!(@velocity(stokes)...)
+
+        # interpolate fields from particle to grid vertices
+        particle2grid!(T_buffer, pT, xvi, particles)
+        @views T_buffer[:, end]      .= Ttop
+        @views T_buffer[:, 1]        .= Tbot
+        @views thermal.T[2:end-1, :] .= T_buffer
+        thermal_bcs!(thermal, thermal_bc)
+        temperature2center!(thermal)
+
+        # args = (; T = thermal.Tc, P = stokes.P,  dt=Inf, cohesion_C = cohesion_damage)
+        args = (; T = thermal.Tc, P = stokes.P,  dt=Inf)
+
+        # Stokes solver ----------------
+        t_stokes = @elapsed begin
+            solve_VariationalStokes!(
+                stokes,
+                pt_stokes,
+                di,
+                flow_bcs,
+                ρg,
+                phase_ratios,
+                ϕ_R,
+                rheology,
+                args,
+                dt,
+                strain_increment,
+                igg;
+                kwargs = (;
+                    iterMax = it > 0 ? 250e3 : 50.0e4,
+                    free_surface = true,
+                    nout = 1e3,
+                    viscosity_cutoff = viscosity_cutoff,
+                )
+            )
+        end
+        # dtmax = (it < 10 ? 2e3 : 3e3) * 3600 * 24 * 365 # diffusive CFL timestep limiter
+        dt    = compute_dt(stokes, di, dtmax)
+        println("Stokes solver time             ")
+        println("   Total time:      $t_stokes s")
+        println("           Δt:      $(dt / (3600 * 24 * 365)) kyrs")
+        # println("   Time/iteration:  $(t_stokes / out.iter) s")
+        # ------------------------------
+
+        compute_shear_heating!(
+            thermal,
+            stokes,
+            phase_ratios,
+            rheology, # needs to be a tuple
+            dt,
+        )
+
+        # Thermal solver ---------------
+        # update mask of Dirichlet BC
+        @parallel (@idx ni .+ 1) update_Dirichlet_mask!(thermal_bc.dirichlet.mask, phase_ratios.vertex, air_phase)
+        heatdiffusion_PT!(
+            thermal,
+            pt_thermal,
+            thermal_bc,
+            rheology,
+            args,
+            dt,
+            di;
+            kwargs = (
+                igg     = nothing,
+                phase   = phase_ratios,
+                iterMax = 50e4,
                 nout    = 1e3,
                 verbose = true,
             )

@@ -1,4 +1,7 @@
-using GeophysicalModelGenerator
+using GeophysicalModelGenerator, GMT
+using Interpolations
+
+
 
 function flat_setup(Nx, Nz)
 
@@ -18,23 +21,24 @@ function flat_setup(Nx, Nz)
      # In many (geodynamic) models, one also has to define the temperature, so lets define it as well
      Temp = fill(0.0, nx, ny, nz);
  
-     depth_layers = [15] # depth of the ith layer in km
+     depth_layers = [15 50] # depth of the ith layer in km
      lith = LithosphericPhases(Layers=depth_layers, Phases=[1 2])
  
      add_box!(Phases, Temp, Grid; 
          xlim  =(-Lx, Lx), 
          ylim  =(-Ly, Ly), 
-         zlim  =(-60.0, 0.0), 
+         zlim  =(-70.0, 0.0), 
          phase = lith, 
          T     = HalfspaceCoolingTemp(Age=20)
      )
     
-     add_ellipsoid!(Phases, Temp, Grid; 
-         cen    = (0, 0, -16),
-         axes   = (2, 2,2),
-         phase  = ConstantPhase(3),
-         # T  = ConstantTemp(150),
-     )
+     add_box!(Phases, Temp, Grid; 
+              xlim=(-1.0,1.0),
+              ylim=(-Ly, Ly), 
+              zlim=(-1, -20), 
+              phase = ConstantPhase(3), 
+              DipAngle=-30);
+
  
     for I in eachindex(Grid.z.val)
         if Grid.z.val[I...] > 0 
@@ -43,6 +47,7 @@ function flat_setup(Nx, Nz)
         end
     end
 
+    # @. Temp[Phases == 3]  += 50 # increase temperature in the ellipsoid weak zone
     Grid = addfield(Grid,(; Phases, Temp))
 
     li     = (abs(last(x)-first(x)),  abs(last(z)-first(z))) .* 1e3
