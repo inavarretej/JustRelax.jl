@@ -35,6 +35,7 @@ end
 # Load script dependencies
 using GeoParams
 #using  CairoMakie
+using JLD2
 
 # Load file with all the rheology configurations
 include("RiftSetup_FaultInclusion.jl")
@@ -408,6 +409,21 @@ function main(li, origin, phases_GMG, igg; nx=16, ny=16, figdir="figs2D", do_vtk
             # Make particles plottable
             tensor_invariant!(stokes.ε)
             tensor_invariant!(stokes.ε_pl)
+
+            # allocate CellArrays to store the velocity field of the marker chain
+            chain_V  = similar(chain.coords[1]), similar(chain.coords[1]);
+            chain_V[1].data  .*= 0
+            chain_V[2].data  .*= 0
+
+            interpolate_velocity_to_markerchain!(chain, chain_V, V, grid_vxi)
+
+
+
+            args = Dict(
+                :Vx_chain => Array(chain_V[1]),
+                :Vy_chain => Array(chain_V[2]),
+            )
+            jldsave(joinpath(vtk_dir, "chain_" * lpad("$it", 6, "0")); args...)
 
             # p        = particles.coords
             # ppx, ppy = p
