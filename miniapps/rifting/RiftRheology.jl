@@ -4,7 +4,7 @@ function init_rheologies()
 
     # Dislocation and Diffusion creep
  
-    disl_lithospheric_mantle    = DislocationCreep(A=2.51e-17, n=3.5, E=530e3, V=6e-6,  r=0.0, R=8.3145)
+    disl_lithospheric_mantle    = DislocationCreep(A=2.51e-17, n=3.5, E=100e3, V=6e-6,  r=0.0, R=8.3145)
     diff_lithospheric_mantle    = DiffusionCreep(A=2.51e-17, n=1.0, E=0, V=0,  p=0, r=0.0, R=8.3145)
 
     # rheologies from the GeoParams database
