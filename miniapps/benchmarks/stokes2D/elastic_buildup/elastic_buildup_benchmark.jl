@@ -23,9 +23,8 @@ function init_phases!(phase_ratios)
     end
 
     @parallel (@idx ni) init_phases!(phase_ratios.center)
-    @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex)
+    return @parallel (@idx ni .+ 1) init_phases!(phase_ratios.vertex)
 end
-
 
 
 # MAIN SCRIPT --------------------------------------------------------------------
@@ -70,7 +69,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             Phase = 1,
             Density = ConstantDensity(; ρ = 2700.0),
             Gravity = ConstantGravity(; g = 9.81),
-            CompositeRheology = CompositeRheology((visc, el_bg, )),
+            CompositeRheology = CompositeRheology((visc, el_bg)),
             Elasticity = el_bg,
 
         ),
@@ -90,11 +89,11 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     pt_stokes = PTStokesCoeffs(li, di; ϵ = 1.0e-6, CFL = 0.75 / √2.1)
 
     # Buoyancy forces
-    ρg               = ntuple(_ -> @zeros(ni...), Val(2))
-    compute_ρg!(ρg[2], phase_ratios, rheology, (T=@zeros(ni...), P=stokes.P))
-    stokes.P        .= PTArray(backend_JR)(reverse(cumsum(reverse((ρg[2]).* di[2], dims=2), dims=2), dims=2))
+    ρg = ntuple(_ -> @zeros(ni...), Val(2))
+    compute_ρg!(ρg[2], phase_ratios, rheology, (T = @zeros(ni...), P = stokes.P))
+    stokes.P .= PTArray(backend_JR)(reverse(cumsum(reverse((ρg[2]) .* di[2], dims = 2), dims = 2), dims = 2))
 
-    args = (; T = @zeros(ni...), P = stokes.P, dt = dt, perturbation_C =  @zeros(ni...))
+    args = (; T = @zeros(ni...), P = stokes.P, dt = dt, perturbation_C = @zeros(ni...))
 
     # Rheology
     compute_viscosity!(
@@ -137,17 +136,17 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             strain_increment,
             igg;
             kwargs = (
-                verbose          = false,
-                iterMax          = 50e3,
-                nout             = 1e2,
-                viscosity_cutoff = (-Inf, Inf)
+                verbose = false,
+                iterMax = 50.0e3,
+                nout = 1.0e2,
+                viscosity_cutoff = (-Inf, Inf),
             )
         )
         tensor_invariant!(stokes.ε)
         push!(τII, maximum(stokes.τ.xx))
 
         it += 1
-        t  += dt
+        t += dt
 
         push!(sol, solution(εbg, t, G0, η0))
         push!(ttot, t)
@@ -155,28 +154,28 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         println("it = $it; t = $t \n")
 
         # visualisation
-        th    = 0:pi/50:3*pi;
-        xunit = @. radius * cos(th) + 0.5;
-        yunit = @. radius * sin(th) + 0.5;
+        th = 0:(pi / 50):(3 * pi)
+        xunit = @. radius * cos(th) + 0.5
+        yunit = @. radius * sin(th) + 0.5
 
-        x1 = 1e3.*(1:length(iters.norm_Rx)) 
-        fig   = Figure(size = (1600, 1600), title = "t = $t , Strain Increment Approach")
-        ax1   = Axis(fig[1,1], aspect = 1, title = L"\tau_{xx}", titlesize=35)
+        x1 = 1.0e3 .* (1:length(iters.norm_Rx))
+        fig = Figure(size = (1600, 1600), title = "t = $t , Strain Increment Approach")
+        ax1 = Axis(fig[1, 1], aspect = 1, title = L"\tau_{xx}", titlesize = 35)
         # ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
-        ax2   = Axis(fig[2,1], aspect = 1, title = L"E_{II}", titlesize=35)
-        ax3   = Axis(fig[1,2], aspect = 1, title = L"\log_{10}(\varepsilon_{xx})", titlesize=35)
-        ax4   = Axis(fig[2,2], aspect = 1)
-        ax5 = Axis(fig[1, 3], title="Log10 Rx", xlabel="Iteration", ylabel="Error")
-        ax6 = Axis(fig[2, 3], title="Log10 Ry", xlabel="Iteration", ylabel="Error")
-        heatmap!(ax1, xci..., Array(stokes.τ.xx) , colormap=:batlow)
+        ax2 = Axis(fig[2, 1], aspect = 1, title = L"E_{II}", titlesize = 35)
+        ax3 = Axis(fig[1, 2], aspect = 1, title = L"\log_{10}(\varepsilon_{xx})", titlesize = 35)
+        ax4 = Axis(fig[2, 2], aspect = 1)
+        ax5 = Axis(fig[1, 3], title = "Log10 Rx", xlabel = "Iteration", ylabel = "Error")
+        ax6 = Axis(fig[2, 3], title = "Log10 Ry", xlabel = "Iteration", ylabel = "Error")
+        heatmap!(ax1, xci..., Array(stokes.τ.xx), colormap = :batlow)
         # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
         # heatmap!(ax2, xci..., Array(log10.(stokes.EII_pl)) , colormap=:batlow)
-        heatmap!(ax3, xci..., Array(log10.(stokes.ε.xx)) , colormap=:batlow)
+        heatmap!(ax3, xci..., Array(log10.(stokes.ε.xx)), colormap = :batlow)
         lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
         lines!(ax4, ttot, τII, color = :black)
         lines!(ax4, ttot, sol, color = :red)
-        plot!(ax5, x1, Array(log10.(iters.norm_Rx)), color=:blue)
-        plot!(ax6, x1, Array(log10.(iters.norm_Ry)), color=:blue)
+        plot!(ax5, x1, Array(log10.(iters.norm_Rx)), color = :blue)
+        plot!(ax6, x1, Array(log10.(iters.norm_Ry)), color = :blue)
         hidexdecorations!(ax1)
         hidexdecorations!(ax3)
         save(joinpath(figdir, "$(it).png"), fig)
@@ -186,11 +185,11 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 end
 
 
-n      = 256
-nx     = n
-ny     = n
+n = 256
+nx = n
+ny = n
 figdir = "output/elastic_buildup_strainrate"
-igg  = if !(JustRelax.MPI.Initialized())
+igg = if !(JustRelax.MPI.Initialized())
     IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
 else
     igg
