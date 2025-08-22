@@ -462,17 +462,11 @@ end
         dτ_rv = inv(θ_dτ * dt + ηv_ij * _Gv + dt)
 
         # stress increments @ vertex
-        dτxxv =
-            (-(τxxv_ij - τxxv_old_ij) * ηv_ij * _Gv - τxxv_ij* dt + 2.0 * ηv_ij * Δεxxv_ij) *
-            dτ_rv
-        dτyyv =
-            (-(τyyv_ij - τyyv_old_ij) * ηv_ij * _Gv - τyyv_ij * dt + 2.0 * ηv_ij * Δεyyv_ij) *
-            dτ_rv
-        dτxyv =
-            (
-            -(τxyv[I...] - τxyv_old[I...]) * ηv_ij * _Gv - τxyv[I...] * dt +
-                2.0 * ηv_ij * Δε[3][I...]
-        ) * dτ_rv
+        dτxxv = compute_stress_increment(τxxv_ij, τxxv_old_ij, ηv_ij, Δεxxv_ij, _Gv, dτ_rv,dt)
+        dτyyv = compute_stress_increment(τyyv_ij, τyyv_old_ij, ηv_ij, Δεyyv_ij, _Gv, dτ_rv,dt)
+        dτxyv = compute_stress_increment(
+            τxyv[I...], τxyv_old[I...], ηv_ij, Δε[3][I...], _Gv, dτ_rv,dt
+        )
         τIIv_ij = √(
             0.5 * ((τxxv_ij + dτxxv)^2 + (τyyv_ij + dτyyv)^2) + (τxyv[I...] + dτxyv)^2
         )
@@ -516,7 +510,7 @@ end
             εij_ve = @. εij + 0.5 * τij_o * _Gdt
             εII_ve = GeoParams.second_invariant(εij_ve)
             # stress increments @ center
-            dτij = @. (-(τij - τij_o) * ηij * _G - τij * dt .+ 2.0 * ηij * Δεij) * dτ_r
+            dτij = compute_stress_increment(τij, τij_o, ηij, Δεij, _Gdt, dτ_r,dt)
             τII_ij = GeoParams.second_invariant(dτij .+ τij)
             # yield function @ center
             F = τII_ij - C * cosϕ - max(Pr[I...], 0.0) * sinϕ
