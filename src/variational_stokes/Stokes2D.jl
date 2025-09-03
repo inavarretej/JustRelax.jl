@@ -95,10 +95,6 @@ function _solve_VS!(
 
             @parallel (@idx ni) compute_∇V!(stokes.∇V, @velocity(stokes), ϕ, _di)
 
-            if strain_increment
-                @parallel (@idx ni) compute_∇V!(stokes.∇U, @displacement(stokes), ϕ, _di)
-            end
-
             compute_P!(
                 θ,
                 stokes.P0,
@@ -116,17 +112,13 @@ function _solve_VS!(
 
             update_ρg!(ρg[2], phase_ratios, rheology, args)
 
-            if strain_increment
-                @parallel (@idx ni .+ 1) compute_strain_rate!(
-                    @strain_increment(stokes)..., stokes.∇U, @displacement(stokes)..., ϕ, _di...
+            @parallel (@idx ni .+ 1) compute_strain_rate!(
+                    @strain(stokes)..., stokes.∇V, @velocity(stokes)..., ϕ, _di...
                 )
 
-                @parallel (@idx ni .+ 1) compute_strain_rate_from_increment!(
-                    @strain(stokes)..., @strain_increment(stokes)..., ϕ, _dt
-                )
-            else
-                @parallel (@idx ni .+ 1) compute_strain_rate!(
-                    @strain(stokes)..., stokes.∇V, @velocity(stokes)..., ϕ, _di...
+            if strain_increment
+                @parallel (@idx ni .+ 1) compute_strain_increment!(
+                    @strain(stokes)..., @strain_increment(stokes)..., ϕ, dt
                 )
             end
 

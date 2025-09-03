@@ -35,23 +35,23 @@ end
     return nothing
 end
 
-@parallel_indices (i, j) function compute_strain_rate_from_increment!(
-        εxx::AbstractArray{T, 2}, εyy, εxy, Δεxx, Δεyy, Δεxy, ϕ::JustRelax.RockRatio, _dt
+@parallel_indices (i, j) function compute_strain_increment!(
+        εxx::AbstractArray{T, 2}, εyy, εxy, Δεxx, Δεyy, Δεxy, ϕ::JustRelax.RockRatio, dt
     ) where {T}
 
     if all((i, j) .≤ size(εxx))
         if isvalid_c(ϕ, i, j)
-            εxx[i, j] = Δεxx[i, j] * _dt
-            εyy[i, j] = Δεyy[i, j] * _dt
+            Δεxx[i, j] = εxx[i, j] * dt
+            Δεyy[i, j] = εyy[i, j] * dt
         else
-            εxx[i, j] = zero(T)
-            εyy[i, j] = zero(T)
+            Δεxx[i, j] = zero(T)
+            Δεyy[i, j] = zero(T)
         end
 
     end
 
-    εxy[i, j] = if isvalid_v(ϕ, i, j)
-        Δεxy[i, j] * _dt
+    Δεxy[i, j] = if isvalid_v(ϕ, i, j)
+        εxy[i, j] * dt
     else
         zero(T)
     end
