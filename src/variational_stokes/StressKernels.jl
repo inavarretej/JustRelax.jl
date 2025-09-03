@@ -501,7 +501,7 @@ end
             # stress correction @ vertex
             λv[I...] =
                 @muladd (1.0 - relλ) * λv[I...] +
-                relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv * dt + η_regv + volumev))
+                relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv + η_regv + volumev))
             dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
             εij_pl = λv[I...] * dQdτxy
             τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * dt * εij_pl * dτ_rv
@@ -544,7 +544,7 @@ end
                 # stress correction @ center
                 λ[I...] =
                     @muladd (1.0 - relλ) * λ[I...] +
-                    relλ .* (max(F, 0.0) / (η[I...] * dτ_r * dt + η_reg + volume))
+                    relλ .* (max(F, 0.0) / (η[I...] * dτ_r + η_reg + volume))
                 dQdτij = @. 0.5 * (τij + dτij) / τII_ij
                 εij_pl = λ[I...] .* dQdτij
                 dτij = @muladd @. dτij - 2.0 * ηij * εij_pl * dτ_r
@@ -557,8 +557,8 @@ end
             else
                 # stress correction @ center
                 Base.@nexprs 3 i -> begin
-                    @inbounds τ[i][I...] = dτij[i] .+ τij[i]
-                    @inbounds ε_pl[i][I...] = 0.0
+                  τ[i][I...] = dτij[i] .+ τij[i]
+                  ε_pl[i][I...] = 0.0
                 end
                 τII_ij
             end
