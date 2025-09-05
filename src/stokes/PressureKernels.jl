@@ -170,7 +170,7 @@ end
 
 function _compute_P!(P, ∇V, Q, η, dt, r, θ_dτ)
     RP = -∇V + (Q * inv(dt))
-    P += RP * r / θ_dτ * η
+    P += RP * r * η / θ_dτ
     return RP, P
 end
 

@@ -480,10 +480,12 @@ end
             rheology, EIIv_ij, phase
         )
         _Gv = inv(fn_ratio(get_shear_modulus, rheology, phase))
+        _Gvdt = inv(fn_ratio(get_shear_modulus, rheology, phase)*dt)
         Kv = fn_ratio(get_bulk_modulus, rheology, phase)
         volumev = isinf(Kv) ? 0.0 : Kv * dt * sinϕv * sinψv # plastic volumetric change K * dt * sinϕ * sinψ
         ηv_ij = av_clamped(η, Ic...)
         dτ_rv = inv(θ_dτ * dt + ηv_ij * _Gv + dt)
+        dτ_rv2 = inv(θ_dτ + ηv_ij * _Gvdt + 1.0)
 
         # stress increments @ vertex
         dτxxv = compute_stress_increment(τxxv_ij, τxxv_old_ij, ηv_ij, Δεxxv_ij, _Gv, dτ_rv, dt)
@@ -501,7 +503,7 @@ end
             # stress correction @ vertex
             λv[I...] =
                 @muladd (1.0 - relλ) * λv[I...] +
-                relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv * dt + η_regv + volumev))
+                relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv2 + η_regv + volumev))
             dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
             εij_pl = λv[I...] * dQdτxy
             τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * dt * εij_pl * dτ_rv
@@ -527,6 +529,7 @@ end
             volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
             ηij = η[I...]
             dτ_r = 1.0 / (θ_dτ * dt + ηij * _G + dt)
+            dτ_r2 = inv(θ_dτ + ηij * _Gdt + 1.0)
 
             # cache strain rates for center calculations
             τij, τij_o, εij, Δεij = cache_tensors(τ, τ_o, ε, Δε, I...)
@@ -544,7 +547,7 @@ end
                 # stress correction @ center
                 λ[I...] =
                     @muladd (1.0 - relλ) * λ[I...] +
-                    relλ .* (max(F, 0.0) / (η[I...] * dτ_r * dt + η_reg + volume))
+                    relλ .* (max(F, 0.0) / (η[I...] * dτ_r2  + η_reg + volume))
                 dQdτij = @. 0.5 * (τij + dτij) / τII_ij
                 εij_pl = λ[I...] .* dQdτij
                 dτij = @muladd @. dτij - 2.0 * ηij * εij_pl * dτ_r

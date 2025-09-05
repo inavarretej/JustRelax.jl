@@ -16,7 +16,8 @@ function compute_stress_increment(
 end
 
 function compute_stress_increment(τij::Real, τij_o::Real, ηij, Δεij::Real, _G, dτ_r, dt)
-    dτij = dτ_r * fma(2.0 * ηij, Δεij, fma(-(τij - τij_o) * ηij, _G, -τij * dt))
+    # dτij = dτ_r * fma(2.0 * ηij, Δεij, fma(-(τij - τij_o) * ηij, _G, -τij * dt))
+    dτij = (2.0 * ηij *  Δεij + ηij * _G * (τij_o - τij) - τij * dt ) * dτ_r
     return dτij
 end
 
@@ -25,8 +26,7 @@ function compute_stress_increment(
     ) where {N}
     dτij = ntuple(Val(N)) do i
         Base.@_inline_meta
-        return dτ_r *
-            fma(2.0 * ηij, Δεij[i], fma(-((τij[i] - τij_o[i])) * ηij, _G, -τij[i] * dt))
+        return (2.0 * ηij *  Δεij + ηij * _G * (τij_o - τij) - τij * dt ) * dτ_r
     end
     return dτij
 end
