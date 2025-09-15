@@ -475,7 +475,7 @@ end
         EIIv_ij = av_clamped(EII, Ic...)
 
         ## vertex
-        phase = @inbounds phase_vertex[I...]
+        phase = phase_vertex[I...]
         is_pl, Cv, sinϕv, cosϕv, sinψv, η_regv = plastic_params_phase(
             rheology, EIIv_ij, phase
         )
@@ -522,13 +522,11 @@ end
             phase = @inbounds phase_center[I...]
             _G = inv(fn_ratio(get_shear_modulus, rheology, phase))
             _Gdt = inv(fn_ratio(get_shear_modulus, rheology, phase) * dt)
-            is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(
-                rheology, EII[I...], phase
-            )
+            is_pl, C, sinϕ, cosϕ, sinψ, η_reg = plastic_params_phase(rheology, EII[I...], phase)
             K = fn_ratio(get_bulk_modulus, rheology, phase)
             volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
             ηij = η[I...]
-            dτ_r = 1.0 / (θ_dτ * dt + ηij * _G + dt)
+            dτ_r = inv(θ_dτ * dt + ηij * _G + dt)
             dτ_r2 = inv(θ_dτ + ηij * _Gdt + 1.0)
 
             # cache strain rates for center calculations
@@ -550,7 +548,7 @@ end
                     relλ .* (max(F, 0.0) / (η[I...] * dτ_r2  + η_reg + volume))
                 dQdτij = @. 0.5 * (τij + dτij) / τII_ij
                 εij_pl = λ[I...] .* dQdτij
-                dτij = @muladd @. dτij - 2.0 * ηij * εij_pl * dτ_r
+                dτij = @muladd @. dτij - 2.0 * ηij * εij_pl * dτ_r * dt
                 τij = dτij .+ τij
                 Base.@nexprs 3 i -> begin
                     @inbounds τ[i][I...] = τij[i]

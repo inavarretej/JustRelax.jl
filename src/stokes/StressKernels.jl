@@ -16,8 +16,7 @@ function compute_stress_increment(
 end
 
 function compute_stress_increment(τij::Real, τij_o::Real, ηij, Δεij::Real, _G, dτ_r, dt)
-    # dτij = dτ_r * fma(2.0 * ηij, Δεij, fma(-(τij - τij_o) * ηij, _G, -τij * dt))
-    dτij = (2.0 * ηij *  Δεij + ηij * _G * (τij_o - τij) - τij * dt ) * dτ_r
+    dτij = dτ_r * fma(2.0 * ηij, Δεij, fma(-(τij - τij_o) * ηij, _G, -τij*dt))
     return dτij
 end
 
@@ -26,7 +25,8 @@ function compute_stress_increment(
     ) where {N}
     dτij = ntuple(Val(N)) do i
         Base.@_inline_meta
-        return (2.0 * ηij *  Δεij + ηij * _G * (τij_o - τij) - τij * dt ) * dτ_r
+        return dτ_r *
+            fma(2.0 * ηij, Δεij[i], fma(-((τij[i] - τij_o[i])) * ηij, _G, -τij[i]*dt))
     end
     return dτij
 end
@@ -986,8 +986,8 @@ end
 
 ## 2D kernel with strain increment Δε
 @parallel_indices (I...) function update_stresses_center_vertex_ps!(
-        ε::NTuple{3},         # normal components @ centers; shear components @ vertices
-        Δε::NTuple{3},         # normal components @ centers; shear components @ vertices
+        ε::NTuple{3},      # normal components @ centers; shear components @ vertices
+        Δε::NTuple{3},
         ε_pl::NTuple{3},      # whole Voigt tensor @ centers
         EII,                  # accumulated plastic strain rate @ centers
         τ::NTuple{3},         # whole Voigt tensor @ centers
@@ -1006,11 +1006,7 @@ end
         θ_dτ,
         rheology,
         phase_center,
-        phase_vertex,
-        phase_xy,
-        phase_yz,
-        phase_xz,
-    )
+        phase_vertex,)
     τxyv = τshear_v[1]
     τxyv_old = τshear_ov[1]
     ni = size(Pr)
@@ -1057,7 +1053,9 @@ end
             @muladd (1.0 - relλ) * λv[I...] +
             relλ * (max(Fv, 0.0) / (ηv_ij * dτ_rv * dt + η_regv + volumev))
         dQdτxy = 0.5 * (τxyv[I...] + dτxyv) / τIIv_ij
-        τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * dt * λv[I...] * dQdτxy * dτ_rv
+        εij_pl = λv[I...] * dQdτxy
+        τxyv[I...] += @muladd dτxyv - 2.0 * ηv_ij * dt * εij_pl * dτ_rv
+       
     else
         # stress correction @ vertex
         τxyv[I...] += dτxyv
@@ -1073,7 +1071,7 @@ end
         K = fn_ratio(get_bulk_modulus, rheology, phase)
         volume = isinf(K) ? 0.0 : K * dt * sinϕ * sinψ # plastic volumetric change K * dt * sinϕ * sinψ
         ηij = η[I...]
-        dτ_r = 1.0 / (θ_dτ * dt + ηij * _G + dt)
+        dτ_r = inv(θ_dτ * dt + ηij * _G + dt)
         dτ_r2 = inv(θ_dτ + ηij * _Gdt + 1.0)
         # cache strain rates for center calculations
         τij, τij_o, εij, Δεij = cache_tensors(τ, τ_o, ε, Δε, I...)

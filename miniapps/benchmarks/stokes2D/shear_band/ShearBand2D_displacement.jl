@@ -1,4 +1,4 @@
-using GeoParams, GLMakie, CellArrays
+using GeoParams, CairoMakie, CellArrays
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
@@ -120,8 +120,8 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         free_slip = (left = true, right = true, top = true, bot = true),
         no_slip = (left = false, right = false, top = false, bot = false),
     )
-    stokes.U.Ux .= PTArray(backend_JR)([ x * εbg * lx * dt for x in xvi[1], _ in 1:(ny + 2)])
-    stokes.U.Uy .= PTArray(backend_JR)([-y * εbg * ly * dt for _ in 1:(nx + 2), y in xvi[2]])
+    stokes.U.Ux .= PTArray(backend_JR)([ x * εbg * dt for x in xvi[1], _ in 1:(ny + 2)])
+    stokes.U.Uy .= PTArray(backend_JR)([-y * εbg * dt for _ in 1:(nx + 2), y in xvi[2]])
     flow_bcs!(stokes, flow_bcs) # apply boundary conditions
     displacement2velocity!(stokes, dt)
     update_halo!(@velocity(stokes)...)
@@ -139,7 +139,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     while t < tmax
 
         # Stokes solver ----------------
-        iters = solve!(
+        iters = solve_displacement!(
             stokes,
             pt_stokes,
             di,
@@ -151,7 +151,6 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             dt,
             igg;
             kwargs = (
-                strain_increment = true,
                 verbose = false,
                 iterMax = 50.0e3,
                 nout = 1.0e2,

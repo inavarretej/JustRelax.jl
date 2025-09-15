@@ -1,4 +1,4 @@
-using GeoParams, GLMakie, CellArrays
+using GeoParams, CairoMakie, CellArrays
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
@@ -173,6 +173,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         th = 0:(pi / 50):(3 * pi)
         xunit = @. radius * cos(th) + 0.5
         yunit = @. radius * sin(th) + 0.5
+
         fig = Figure(size = (1600, 1600), title = "t = $t")
         ax1 = Axis(fig[1, 1], aspect = 1, title = L"\tau_{II}", titlesize = 35)
         ax2 = Axis(fig[2, 1], aspect = 1, title = L"E_{II}", titlesize = 35)

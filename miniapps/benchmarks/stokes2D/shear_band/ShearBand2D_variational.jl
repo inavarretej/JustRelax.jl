@@ -1,4 +1,4 @@
-using GeoParams, GLMakie, CellArrays
+using GeoParams, CairoMakie, CellArrays
 using JustRelax, JustRelax.JustRelax2D
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
@@ -37,6 +37,17 @@ function init_phases!(phase_ratios, xci, xvi, circle)
     return nothing
 end
 
+
+n = 128
+nx = n
+ny = n
+figdir = "Variational_ShearBands2D"
+igg = if !(JustRelax.MPI.Initialized())
+    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
+else
+    igg
+end
+
 # MAIN SCRIPT --------------------------------------------------------------------
 function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
@@ -69,7 +80,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         C = C / cosd(ϕ),
         ϕ = ϕ,
         η_vp = η_reg,
-        Ψ = 15
+        Ψ = 0
     )
 
     rheology = (
@@ -85,7 +96,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         ),
         # High density phase
         SetMaterialParams(;
-            Phase = 1,
+            Phase = 2,
             Density = ConstantDensity(; ρ = 0.0),
             Gravity = ConstantGravity(; g = 0.0),
             # CompositeRheology = CompositeRheology((visc, el_inc, )),
@@ -141,7 +152,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
     sol = Float64[]
     ttot = Float64[]
 
-    # while t < tmax
+   # while t < tmax
     for _ in 1:15
 
         # Stokes solver ----------------
@@ -159,7 +170,7 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
             igg;
             kwargs = (;
                 iterMax = 50.0e3,
-                nout = 2.0e3,
+                nout = 1.0e3,
                 viscosity_cutoff = (-Inf, Inf),
             )
         )
@@ -174,20 +185,19 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
 
         println("it = $it; t = $t \n")
 
-        # visualisation
+         # visualisation
         th = 0:(pi / 50):(3 * pi)
         xunit = @. radius * cos(th) + 0.5
         yunit = @. radius * sin(th) + 0.5
 
         fig = Figure(size = (1600, 1600), title = "t = $t")
         ax1 = Axis(fig[1, 1], aspect = 1, title = L"\tau_{II}", titlesize = 35)
-        # ax2   = Axis(fig[2,1], aspect = 1, title = "η_vep")
         ax2 = Axis(fig[2, 1], aspect = 1, title = L"E_{II}", titlesize = 35)
         ax3 = Axis(fig[1, 2], aspect = 1, title = L"\log_{10}(\varepsilon_{II})", titlesize = 35)
         ax4 = Axis(fig[2, 2], aspect = 1)
         heatmap!(ax1, xci..., Array(stokes.τ.II), colormap = :batlow)
         # heatmap!(ax2, xci..., Array(log10.(stokes.viscosity.η_vep)) , colormap=:batlow)
-        heatmap!(ax2, xci..., Array(log10.(stokes.EII_pl)), colormap = :batlow)
+        heatmap!(ax2, xci..., Array(stokes.EII_pl), colormap = :batlow)
         heatmap!(ax3, xci..., Array(log10.(stokes.ε.II)), colormap = :batlow)
         lines!(ax2, xunit, yunit, color = :black, linewidth = 5)
         lines!(ax4, ttot, τII, color = :black)
@@ -196,18 +206,10 @@ function main(igg; nx = 64, ny = 64, figdir = "model_figs")
         hidexdecorations!(ax3)
         save(joinpath(figdir, "$(it).png"), fig)
 
+
     end
 
     return nothing
 end
 
-n = 128
-nx = n
-ny = n
-figdir = "Variational_ShearBands2D"
-igg = if !(JustRelax.MPI.Initialized())
-    IGG(init_global_grid(nx, ny, 1; init_MPI = true)...)
-else
-    igg
-end
 main(igg; figdir = figdir, nx = nx, ny = ny);

@@ -276,3 +276,113 @@ end
 
     return nothing
 end
+
+
+@parallel_indices (i, j) function compute_U!(
+        Ux::AbstractArray{T, 2},
+        Uy,
+        Vy,
+        Rx,
+        Ry,
+        P,
+        τxx,
+        τyy,
+        τxy,
+        ηdτ,
+        ρgx,
+        ρgy,
+        ητ,
+        lτ,
+        Vpdτ,
+        dt,
+        _dx,
+        _dy,
+    ) where {T}
+    Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A,  _dx, i, j)
+    Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A,  _dx, i, j)
+    Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A,  _dy, i, j)
+    Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A,  _dy, i, j)
+    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
+    Base.@propagate_inbounds @inline harm_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline harm_ya(A) = _av_ya(A, i, j)
+
+    if all((i, j) .< size(Ux) .- 1)
+            Rx[i, j] =
+                R_Ux = (
+                -d_xa(P) + d_xa(τxx) + d_yi(τxy) -
+                    av_xa(ρgx)
+            )
+            Ux[i + 1, j + 1] += R_Ux * ηdτ * dt / ( av_xa(ητ) )
+    end
+
+    if all((i, j) .< size(Uy) .- 1)
+            Ry[i, j] =
+                R_Uy =
+                -d_ya(P) + d_ya(τyy) + d_xi(τxy) -
+                av_ya(ρgy)
+            Uy[i + 1, j + 1] += R_Uy * ηdτ * dt / (av_ya(ητ) )
+
+    end
+
+    return nothing
+end
+
+@parallel_indices (i, j) function compute_U!(
+        Ux::AbstractArray{T, 2},
+        Uy,
+        Vy,
+        Rx,
+        Ry,
+        P,
+        τxx,
+        τyy,
+        τxy,
+        ηdτ,
+        ρgx,
+        ρgy,
+        ητ,
+        lτ,
+        Vpdτ,
+        _dx,
+        _dy,
+        dt,
+    ) where {T}
+    Base.@propagate_inbounds @inline d_xi(A) = _d_xi(A, _dx, i, j)
+    Base.@propagate_inbounds @inline d_xa(A) = _d_xa(A, _dx, i, j)
+    Base.@propagate_inbounds @inline d_yi(A) = _d_yi(A, _dy, i, j)
+    Base.@propagate_inbounds @inline d_ya(A) = _d_ya(A, _dy, i, j)
+    Base.@propagate_inbounds @inline av_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline av_ya(A) = _av_ya(A, i, j)
+    Base.@propagate_inbounds @inline harm_xa(A) = _av_xa(A, i, j)
+    Base.@propagate_inbounds @inline harm_ya(A) = _av_ya(A, i, j)
+
+    if all((i, j) .< size(Ux) .- 1)
+            Rx[i, j] =
+                R_Ux = @inbounds (
+                -d_xa(P) + d_xa(τxx) + d_yi(τxx) -
+                    av_xa(ρgx)
+            )
+            Ux[i + 1, j + 1] += R_Ux * ηdτ * dt / (av_xa(ητ)  )
+    end
+
+    if all((i, j) .< size(Uy) .- 1)
+            θ = 1.0
+            # Vertical velocity
+            Vyᵢⱼ = Vy[i + 1, j + 1]
+            # Get necessary buoyancy forces
+            j_N = min(j + 1, size(ρgy, 2))
+            ρg_S = ρgy[i, j] 
+            ρg_N = ρgy[i, j_N] 
+            # Spatial derivatives
+            ∂ρg∂y = (ρg_N - ρg_S) * _dy
+            # correction term
+            ρg_correction = (Vyᵢⱼ * ∂ρg∂y ) * θ 
+            Ry[i, j] =
+                R_Uy =
+                @inbounds -d_ya(P) + d_ya(τyy) + d_xi(τxy) -
+                av_ya(ρgy) + ρg_correction
+            Uy[i + 1, j + 1] += R_Uy * ηdτ * dt / (av_ya(ητ) )
+    end
+    return nothing
+end
